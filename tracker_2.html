@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Tracker</title>
+
+<!-- Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<!-- Excel Export (SheetJS) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- PDF Export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+:root {
+  --bg: #eef5e9;
+  --card: #ffffff;
+  --text: #2e7d32;
+  --text-dark: #333;
+  --border: #c7e1c4;
+  --accent: #43a047;
+  --accent-dark: #2e7d32;
+  --table-bg: #fafefa;
+  --pending: #fff8d7;
+  --completed: #e9ffe9;
+
+  /* Heatmap shades */
+  --heat-0: #ebedf0;
+  --heat-1: #c6e48b;
+  --heat-2: #7bc96f;
+  --heat-3: #239a3b;
+  --heat-4: #196127;
+}
+
+body.dark {
+  --bg: #202720;
+  --card: #2d332e;
+  --text: #9ff39f;
+  --text-dark: #e8ffe8;
+  --border: #4c614b;
+  --accent: #71d071;
+  --accent-dark: #4db44d;
+  --table-bg: #323c32;
+  --pending: #5c5132;
+  --completed: #364b36;
+
+  --heat-0: #444;
+  --heat-1: #467a4f;
+  --heat-2: #3ea146;
+  --heat-3: #2d8a32;
+  --heat-4: #0f6c12;
+}
+
+body {
+  margin: 0;
+  padding: 25px;
+  background: var(--bg);
+  font-family: "Segoe UI", sans-serif;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 1100px;
+  background: var(--card);
+  padding: 25px;
+  border-radius: 14px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.07);
+}
+
+h1 {
+  text-align: center;
+  color: var(--text);
+  font-size: 28px;
+}
+
+/* Inputs & Buttons */
+input, select, button {
+  padding: 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  font-size: 15px;
+}
+
+button {
+  cursor: pointer;
+}
+
+#addEntry {
+  background: var(--accent);
+  color: white;
+  border: none;
+}
+#addEntry:hover { background: var(--accent-dark); }
+
+.exportBtn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.exportBtn:hover { background: var(--accent-dark); }
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Advanced Search */
+.searchRow {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filter-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.filter-group label {
+  font-size: 13px;
+  color: var(--text-dark);
+  margin-bottom: 4px;
+}
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 25px;
+}
+th {
+  background: var(--accent);
+  color: white;
+  padding: 12px;
+  text-align: left;
+}
+td {
+  background: var(--table-bg);
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.completed { background: var(--completed); }
+.pending { background: var(--pending); }
+
+/* Three-dot menu */
+.action-menu {
+  position: relative;
+  display: inline-block;
+}
+.menu-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-dark);
+}
+.dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  background: var(--card);
+  min-width: 150px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.dropdown button {
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+}
+.dropdown button:hover {
+  background: var(--table-bg);
+}
+.dropdown i {
+  margin-right: 8px;
+}
+
+/* Heatmap */
+#heatmap {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12px, 1fr));
+  grid-auto-rows: 12px;
+  gap: 3px;
+  justify-content: center;
+}
+.heat-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--heat-0);
+  cursor: pointer;
+}
+
+/* Dark mode toggle */
+#darkModeToggle {
+  float: right;
+  margin-top: -40px;
+  cursor: pointer;
+  color: var(--text);
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>Progress Tracker</h1>
+<div id="darkModeToggle"><i class="fa-solid fa-moon"></i></div>
+
+<!-- Input Form -->
+<div class="form-row">
+  <input type="number" id="day" placeholder="Day" min="1">
+  <input type="text" id="topic" placeholder="Topic">
+  <input type="text" id="exercise" placeholder="Exercise">
+  <select id="status">
+    <option value="Pending">Pending</option>
+    <option value="Completed">Completed</option>
+  </select>
+  <input type="text" id="notes" placeholder="Notes">
+  <button id="addEntry">Add</button>
+</div>
+
+<!-- Advanced Search -->
+<div class="searchRow">
+  <div class="filter-group">
+    <label>Search</label>
+    <input type="text" id="searchBox" placeholder="Search anything...">
+  </div>
+
+  <div class="filter-group">
+    <label>Status</label>
+    <select id="filterStatus">
+      <option value="All">All</option>
+      <option value="Pending">Pending</option>
+      <option value="Completed">Completed</option>
+    </select>
+  </div>
+
+  <div class="filter-group">
+    <label>Day From</label>
+    <input type="number" id="dayFrom" min="1">
+  </div>
+
+  <div class="filter-group">
+    <label>Day To</label>
+    <input type="number" id="dayTo" min="1">
+  </div>
+</div>
+
+<!-- Export Buttons -->
+<div style="margin-top: 20px; display: flex; gap: 10px;">
+  <button class="exportBtn" id="exportCSV">CSV</button>
+  <button class="exportBtn" id="exportExcel">Excel</button>
+  <button class="exportBtn" id="exportPDF">PDF</button>
+</div>
+
+<!-- Table -->
+<table id="entryTable">
+<thead>
+<tr>
+  <th>Day</th>
+  <th>Topic</th>
+  <th>Exercise</th>
+  <th>Status</th>
+  <th>Notes</th>
+  <th>Actions</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<!-- Heatmap -->
+<h2 style="text-align:center; color:var(--text); margin-top:30px;">Progress Heatmap</h2>
+<div id="heatmap"></div>
+
+</div>
+
+<script>
+/* ============================================================
+   DATA & STORAGE
+============================================================ */
+let entries = JSON.parse(localStorage.getItem("entries") || "[]");
+let editingIndex = null;
+
+/* Save */
+function save() { localStorage.setItem("entries", JSON.stringify(entries)); }
+
+/* ============================================================
+   DARK MODE
+============================================================ */
+document.getElementById("darkModeToggle").onclick = () => {
+  document.body.classList.toggle("dark");
+  localStorage.setItem("darkMode", document.body.classList.contains("dark"));
+};
+if (localStorage.getItem("darkMode") === "true") { document.body.classList.add("dark"); }
+
+/* ============================================================
+   ADD / EDIT ENTRY
+============================================================ */
+const dayEl = document.getElementById("day");
+const topicEl = document.getElementById("topic");
+const exerciseEl = document.getElementById("exercise");
+const statusEl = document.getElementById("status");
+const notesEl = document.getElementById("notes");
+
+document.getElementById("addEntry").onclick = () => {
+  const day = parseInt(dayEl.value);
+  const topic = topicEl.value.trim();
+  const exercise = exerciseEl.value.trim();
+  const status = statusEl.value;
+  const notes = notesEl.value.trim();
+
+  if (!topic || !exercise) return alert("Topic & Exercise required!");
+
+  const entry = { day, topic, exercise, status, notes };
+
+  if (editingIndex !== null) {
+    entries[editingIndex] = entry;
+    editingIndex = null;
+  } else {
+    entries.push(entry);
+  }
+
+  entries.sort((a,b)=>a.day-b.day);
+  save();
+  renderTable();
+  renderHeatmap();
+
+  topicEl.value = "";
+  exerciseEl.value = "";
+  notesEl.value = "";
+};
+
+/* ============================================================
+   TABLE + SEARCH FILTERS
+============================================================ */
+const searchBox = document.getElementById("searchBox");
+const filterStatus = document.getElementById("filterStatus");
+const dayFrom = document.getElementById("dayFrom");
+const dayTo = document.getElementById("dayTo");
+
+function renderTable() {
+  const tbody = document.querySelector("#entryTable tbody");
+  tbody.innerHTML = "";
+
+  const search = searchBox.value.toLowerCase();
+  const statusFilter = filterStatus.value;
+  const dayFromVal = parseInt(dayFrom.value) || 0;
+  const dayToVal = parseInt(dayTo.value) || Infinity;
+
+  entries.forEach((e, i) => {
+    const match =
+      (e.topic.toLowerCase().includes(search) ||
+       e.exercise.toLowerCase().includes(search) ||
+       e.notes.toLowerCase().includes(search) ||
+       String(e.day).includes(search)) &&
+      (statusFilter === "All" || e.status === statusFilter) &&
+      (e.day >= dayFromVal && e.day <= dayToVal);
+
+    if (!match) return;
+
+    const tr = document.createElement("tr");
+    tr.className = e.status === "Completed" ? "completed" : "pending";
+    tr.draggable = true;
+
+    tr.innerHTML = `
+      <td>${e.day}</td>
+      <td>${e.topic}</td>
+      <td>${e.exercise}</td>
+      <td>${e.status}</td>
+      <td>${e.notes}</td>
+      <td>
+        <div class="action-menu">
+          <button class="menu-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+          <div class="dropdown">
+            <button onclick="editEntry(${i})"><i class="fa-solid fa-pen"></i>Edit</button>
+            <button onclick="deleteEntry(${i})"><i class="fa-solid fa-trash"></i>Delete</button>
+          </div>
+        </div>
+      </td>
+    `;
+    enableDrag(tr, i);
+    tbody.appendChild(tr);
+  });
+  activateMenus();
+}
+
+function activateMenus() {
+  document.querySelectorAll(".menu-btn").forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); closeMenus(); btn.nextElementSibling.style.display = "block"; };
+  });
+  document.addEventListener("click", closeMenus);
+}
+function closeMenus() { document.querySelectorAll(".dropdown").forEach(dd => dd.style.display = "none"); }
+
+/* Drag & Drop */
+function enableDrag(row) {
+  row.addEventListener("dragstart", () => row.classList.add("dragging"));
+  row.addEventListener("dragend", () => { row.classList.remove("dragging"); save(); renderHeatmap(); });
+  row.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    const tbody = row.parentNode;
+    const dragging = document.querySelector(".dragging");
+    if (!dragging) return;
+    tbody.insertBefore(dragging, row);
+  });
+  row.addEventListener("drop", () => {
+    const newOrder = [];
+    document.querySelectorAll("#entryTable tbody tr").forEach(tr => {
+      const day = parseInt(tr.children[0].innerText);
+      newOrder.push(entries.find(e=>e.day===day));
+    });
+    entries = newOrder;
+    save();
+  });
+}
+
+/* Edit / Delete */
+function editEntry(i) {
+  const e = entries[i];
+  dayEl.value = e.day;
+  topicEl.value = e.topic;
+  exerciseEl.value = e.exercise;
+  statusEl.value = e.status;
+  notesEl.value = e.notes;
+  editingIndex = i;
+}
+function deleteEntry(i) {
+  if (!confirm("Delete entry?")) return;
+  entries.splice(i,1);
+  save();
+  renderTable();
+  renderHeatmap();
+}
+
+/* CSV Export */
+document.getElementById("exportCSV").onclick = () => {
+  if(entries.length===0) return alert("No entries!");
+  let csv = "Day,Topic,Exercise,Status,Notes\n";
+  entries.forEach(e => { csv += `"${e.day}","${e.topic}","${e.exercise}","${e.status}","${e.notes}"\n`; });
+  download(csv, "progress.csv", "text/csv");
+};
+
+/* Excel Export */
+document.getElementById("exportExcel").onclick = () => {
+  if(entries.length===0) return alert("No entries!");
+  const ws = XLSX.utils.json_to_sheet(entries);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Progress");
+  XLSX.writeFile(wb, "progress.xlsx");
+};
+
+/* PDF Export */
+document.getElementById("exportPDF").onclick = () => {
+  if(entries.length===0) return alert("No entries!");
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "landscape" });
+
+  doc.setFontSize(18);
+  doc.text("Programming Progress Tracker", 14, 20);
+
+  const total = entries.length;
+  const completed = entries.filter(e => e.status === "Completed").length;
+  const pending = total - completed;
+  doc.setFontSize(12);
+  doc.text(`Total Entries: ${total}`, 14, 30);
+  doc.text(`Completed: ${completed}`, 14, 36);
+  doc.text(`Pending: ${pending}`, 14, 42);
+
+  const tableData = entries.map(e => [e.day, e.topic, e.exercise, e.status, e.notes]);
+  doc.autoTable({
+    startY: 50,
+    head: [['Day','Topic','Exercise','Status','Notes']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [67,160,71], textColor: 255 },
+    bodyStyles: { fillColor: [255,255,255], textColor: [0,0,0] }
+  });
+  doc.save("progress_tracker.pdf");
+};
+
+function download(data, filename, type) {
+  const blob = new Blob([data], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+/* Heatmap */
+function renderHeatmap() {
+  const container = document.getElementById("heatmap");
+  container.innerHTML = "";
+  const map = new Array(365).fill(0);
+  entries.forEach(e => { if(e.day>=1&&e.day<=365) map[e.day-1]+=(e.status==="Completed"?2:1); });
+  map.forEach(val => {
+    const cell = document.createElement("div");
+    cell.className="heat-cell";
+    cell.style.background = val===0?"var(--heat-0)":val===1?"var(--heat-1)":val===2?"var(--heat-2)":val===3?"var(--heat-3)":"var(--heat-4)";
+    container.appendChild(cell);
+  });
+}
+
+/* Search filters */
+searchBox.oninput = renderTable;
+filterStatus.onchange = renderTable;
+dayFrom.oninput = renderTable;
+dayTo.oninput = renderTable;
+
+/* Init */
+renderTable();
+renderHeatmap();
+</script>
+
+</body>
+</html>
