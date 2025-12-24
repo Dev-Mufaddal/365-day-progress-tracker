@@ -13,5 +13,4 @@ A professional productivity dashboard designed to track consistency over a full 
 - **Libraries:** SheetJS (XLSX), jsPDF
 
 ## 🚀 Live Demo
-[Click here to view the Live Demo]
-](https://dev-mufaddal.github.io/365-day-progress-tracker/)
+[Click here to view the Live Demo](https://dev-mufaddal.github.io/365-day-progress-tracker/)
